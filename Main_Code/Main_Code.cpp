@@ -1,101 +1,126 @@
 ﻿#include <iostream>
-#include <thread>
-#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <Windows.h>
+#include <process.h>
 
 /*
-Написать программу для консольного процесса, 
+Написать программу для консольного процесса,
 который состоит из трех потоков: main, min_max и average
 */
 
+constexpr int MinMaxSleepTime = 7;
+constexpr int AverageSleepTime = 12;
+
 struct Data {
+    int size;
     double* Arr;
     double min_elem;
     double max_elem;
     double average_elem;
 };
 
-void Min_Max(std::vector<double> &Array, std::pair<double, double> &minmax) 
-{
-    double min = Array[0];
-    double max = Array[0];
 
-    for (int i = 0; i < Array.size(); i++) {
-        if (Array[i] < min)
+DWORD WINAPI Min_Max(LPVOID data) {
+
+    Data* Array = static_cast<Data*>(data);
+
+    double min = Array->Arr[0];
+    double max = Array->Arr[0];
+
+    for (int i = 0; i < Array->size; i++) {
+        if (Array->Arr[i] < min)
         {
-            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(7));
-            min = Array[i];
+            Sleep(MinMaxSleepTime);
+            min = Array->Arr[i];
         }
-        if (Array[i] > max)
+        if (Array->Arr[i] > max)
         {
-            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(7));
-            max = Array[i];
+            Sleep(MinMaxSleepTime);
+            max = Array->Arr[i];
         }
     }
 
-    std::cout << "Min Element: " << static_cast<int>(min) << std::endl;
-    std::cout << "Max Element: " << static_cast<int>(max) << std::endl;
+    printf("Min Element: %d \n", static_cast<int>(min));
+    printf("Max Element: %d \n", static_cast<int>(max));
 
-    minmax.first = min;
-    minmax.second = max;
+    Array->min_elem = min;
+    Array->max_elem = max;
 
-    return;
+    ExitThread(0);
 }
 
-void Average(std::vector<double> &Array, double &average)
-{
-    double Summ = 0;
-    for (int i = 0; i < Array.size(); ++i) {
-        Summ += Array[i];
-        std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(12));
+DWORD WINAPI Average(LPVOID data) {
+
+    Data* Array = static_cast<Data*>(data);
+
+    double sum = 0;
+    for (int i = 0; i < Array->size; ++i) {
+        sum += Array->Arr[i];
+        Sleep(AverageSleepTime);
     }
-    
-    average = Summ / static_cast<double>(Array.size());
-    std::cout << "Average value of Array: " << average << std::endl;
 
-    return;
+    double average = sum / static_cast<double>(Array->size);
+
+    printf("Average value of Array: %.4f \n", average);
+
+    Array->average_elem = average;
+
+    ExitThread(0);
 }
 
-int main() 
-{
-    std::cout << std::fixed;
-    std::cout.precision(3);
-    int Size;
+int main() {
 
-    std::cout << "Enter number of elements: ";
-    std::cin >> Size;
-    std::vector<double> Array(Size, static_cast<double>(0));
-    std::pair<double, double> minmax;
-    double average;
+    HANDLE hThread_MinMax;
+    HANDLE hThread_Average;
 
-    std::cout << "Enter elements:" << std::endl;
-    for (int i = 0; i < Size; i++) 
+    double* Array;
+    int size;
+
+    printf("Enter number of elements: ");
+    scanf_s("%d", &size);
+    Array = new double[size];
+
+    printf("Enter elements: \n");
+    for (int i = 0; i < size; i++)
     {
-        std::cout << "element " << i << ": ";
+        printf("element %d: ", i);
         int elem;
-        std::cin >>elem;
+        scanf_s("%d", &elem);
         Array[i] = static_cast<double>(elem);
     }
 
-    std::thread ThreadMinMax(Min_Max, std::ref(Array), std::ref(minmax));
-    ThreadMinMax.join();
+    Data data;
+    data.Arr = Array;
+    data.size = size;
 
-    std::thread ThreadAverage(Average, std::ref(Array), std::ref(average));
-    ThreadAverage.join();
+    hThread_MinMax = CreateThread(nullptr, 0, Min_Max, &data, 0, nullptr);
+    WaitForSingleObject(hThread_MinMax, INFINITE);
 
-    std::cout << "Array with all min/max elements to average:" << std::endl;
-    for (int i = 0; i < Array.size(); i++) // Changes !All! min/max elements in Array
+    hThread_Average = CreateThread(nullptr, 0, Average, &data, 0, nullptr);
+    WaitForSingleObject(hThread_Average, INFINITE);
+
+    printf("Array with all min/max elements to average: \n");
+
+    int min_intVal = static_cast<int>(data.min_elem);
+    int max_intVal = static_cast<int>(data.max_elem);
+
+    for (int i = 0; i < size; i++) // Changes !All! min/max elements in Array
     {
-        if (static_cast<int>(Array[i]) == static_cast<int>(minmax.first)
-            || static_cast<int>(Array[i]) == static_cast<int>(minmax.second))
+        int elem_intVal = static_cast<int>(Array[i]);
+        if (elem_intVal == min_intVal || elem_intVal == max_intVal)
         {
-            Array[i] = average;
-            std::cout << "{" << Array[i] << "} ";
+            Array[i] = data.average_elem;
+            printf("{%.4f} ", Array[i]);
         }
         else
         {
-            std::cout << static_cast<int>(Array[i]) << " ";
+            printf("%d ", static_cast<int>(Array[i]));
         }
     }
 
+    delete[] data.Arr;
+
     return 0;
+
 }
